@@ -44,8 +44,30 @@ if ($Mode -eq 'update') {
 }
 
 if ($Mode -eq 'previous') {
-  Start-Sleep -Seconds 90
-  "previous release opened; still running: $(-not $app.HasExited)"
+  # Earlier releases may crash on their first launches (0.2.3 did, until its
+  # shortcuts were stamped). Relaunch until it runs as itself, then leave a
+  # marker in its data so the update must keep it.
+  for ($attempt = 1; $attempt -le 6; $attempt++) {
+    $until = (Get-Date).AddMinutes(4)
+    while ((Get-Date) -lt $until -and -not $app.HasExited) {
+      try {
+        $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 5
+        if ($health.releaseId -eq $version) {
+          wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'echo kept > ~/.local/share/shinoque/data/ci-update-marker'
+          "previous $version running after $attempt launch(es); marker written"
+          "PREVIOUS_READY=1" | Out-File -Append $env:GITHUB_ENV
+          return
+        }
+      } catch {}
+      Start-Sleep -Seconds 10
+    }
+    "launch $attempt did not come up (exited: $($app.HasExited)); relaunching"
+    Get-Process Shinoque -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Seconds 2
+    $app = Start-Process -FilePath $exe -PassThru
+  }
+  "::warning::previous release $version never came up; the update test is inconclusive"
+  "PREVIOUS_READY=0" | Out-File -Append $env:GITHUB_ENV
   return
 }
 
@@ -90,9 +112,11 @@ if ($text -notmatch 'Settings') { throw 'the window does not show the app yet (n
 if ($Mode -eq 'update') {
   $state = Get-Content (Join-Path $env:LOCALAPPDATA 'Shinoque\installer-state.json') -Raw | ConvertFrom-Json
   if ($state.releaseId -ne $version) { throw "installer state still names $($state.releaseId)" }
-  $wsl = (wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'readlink ~/.local/share/shinoque/current; test -d ~/.local/share/shinoque/data && echo data-kept') -replace "`0", ''
+  if ($env:PREVIOUS_READY -ne '1') { throw 'inconclusive: the previous release never ran, so the update path was not exercised' }
+  $wsl = (wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'readlink ~/.local/share/shinoque/current; cat ~/.local/share/shinoque/data/ci-update-marker 2>/dev/null') -replace "`0", ''
   "$wsl"
-  if ($wsl -notmatch "releases/$version" -or $wsl -notmatch 'data-kept') { throw 'the WSL release did not switch or data was lost' }
+  if ($wsl -notmatch "releases/$version") { throw 'the WSL release did not switch to the update' }
+  if ($wsl -notmatch 'kept') { throw "the update lost the previous release's data" }
 }
 $crashes = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1000; StartTime = $started } -ErrorAction SilentlyContinue |
   Where-Object { $_.Message -match 'Shinoque' }
