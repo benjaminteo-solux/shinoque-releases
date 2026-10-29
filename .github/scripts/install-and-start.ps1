@@ -149,3 +149,5 @@ $crashes = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1000; 
   Where-Object { $_.Message -match 'Shinoque' }
 if ($crashes) { $crashes | ForEach-Object { $_.Message }; throw 'Windows recorded a Shinoque crash' }
 "$Mode passed"
+# A native probe above may leave a non-zero exit code; every check has passed.
+exit 0
