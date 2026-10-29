@@ -125,7 +125,10 @@ $names | Out-File (Join-Path $evidence "window-text-$Mode.txt")
 $text = $names -join "`n"
 "window shows $($names.Count) named elements"
 if ($text -match 'could not start|Retry after') { throw "the window shows an error: $(($names | Select-String 'could not start|Retry after') -join ' / ')" }
-if ($text -notmatch 'Settings') { throw 'the window does not show the app yet (no Settings entry)' }
+# WebView2 page text is not in the UI Automation tree, but the app titles its
+# window after the open space ("shinoque · Home"); the starting and error
+# screens are titled plain "shinoque".
+if (-not ($names | Where-Object { $_ -match '^shinoque · ' })) { throw "the window does not show the app yet (titles: $($names -join ' / '))" }
 
 # An update keeps the user's data and switches the WSL release.
 if ($Mode -eq 'update') {
