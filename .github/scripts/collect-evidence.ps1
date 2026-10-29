@@ -20,3 +20,5 @@ foreach ($file in "$env:LOCALAPPDATA\Shinoque\startup-error.log", "$env:LOCALAPP
 }
 Get-ChildItem "$env:APPDATA\solubrowse" -Recurse -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $out ("desktop-" + $_.Name)) }
 wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'cd ~/.local/share/shinoque/data/logs 2>/dev/null && tail -n 200 *.log' 2>&1 | Out-File (Join-Path $out 'wsl-logs.txt')
+# Evidence is best-effort; the install step decides the outcome.
+exit 0

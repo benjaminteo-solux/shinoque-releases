@@ -1,6 +1,8 @@
 # Install one release silently, open it the way a tester does, and require the
 # window to stay up and the engine to answer as that release.
-param([Parameter(Mandatory)][string]$Tag, [Parameter(Mandatory)][string]$Label)
+# -Tolerant installs and opens an earlier (possibly broken) release only to set
+# up an upgrade; the candidate that follows must pass.
+param([Parameter(Mandatory)][string]$Tag, [Parameter(Mandatory)][string]$Label, [switch]$Tolerant)
 $ErrorActionPreference = 'Stop'
 $work = Join-Path $env:RUNNER_TEMP $Label
 New-Item -ItemType Directory -Force $work | Out-Null
@@ -18,8 +20,15 @@ $install = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -PassThru 
 "installer exit $($install.ExitCode)"
 if ($install.ExitCode -ne 0) { throw "installer failed ($($install.ExitCode))" }
 
+# 0.2.4 moved the installed proxy out of Windows' reserved port ranges.
+$port = if ([version]$version -lt [version]'0.2.4') { 14800 } else { 47800 }
 $exe = Join-Path $env:LOCALAPPDATA 'Shinoque\Shinoque.exe'
 $app = Start-Process -FilePath $exe -PassThru
+if ($Tolerant) {
+  Start-Sleep -Seconds 90
+  "$Label opened; still running: $(-not $app.HasExited)"
+  return
+}
 $deadline = (Get-Date).AddMinutes(20)
 $healthy = $false
 while ((Get-Date) -lt $deadline) {
@@ -29,7 +38,7 @@ while ((Get-Date) -lt $deadline) {
     throw ("Shinoque exited during startup with 0x{0:X}" -f $app.ExitCode)
   }
   try {
-    $health = Invoke-RestMethod -Uri 'http://127.0.0.1:47800/api/health' -TimeoutSec 5
+    $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 5
     if ($health.name -eq 'shinoqued' -and $health.releaseId -eq $version) { $healthy = $true; break }
     "health answered for release '$($health.releaseId)'; waiting for $version"
   } catch {

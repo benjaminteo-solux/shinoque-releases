@@ -34,7 +34,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.previous }}" -Label previous
+        run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.previous }}" -Label previous -Tolerant
 
       - name: Install and start the candidate
         shell: pwsh
