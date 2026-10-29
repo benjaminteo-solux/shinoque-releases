@@ -16,8 +16,11 @@ id tester >/dev/null 2>&1 || useradd -m -s /bin/bash -G sudo tester
 echo 'tester ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/tester
 printf '[user]\ndefault=tester\n' > /etc/wsl.conf
 '@
-wsl.exe --distribution Ubuntu-24.04 --user root --exec bash -c $setup
+# PowerShell here-strings carry CRLF; bash would read "set -e\r" and stop.
+wsl.exe --distribution Ubuntu-24.04 --user root --exec bash -c ($setup -replace "`r", '')
 if ($LASTEXITCODE -ne 0) { throw 'creating the Ubuntu user failed' }
 wsl.exe --terminate Ubuntu-24.04
 wsl.exe --list --verbose
 wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'echo "user=$(id -un) uid=$(id -u) $(. /etc/os-release; echo $VERSION_ID) $(uname -m)"'
+$uid = ((wsl.exe --distribution Ubuntu-24.04 --exec id -u) -replace "`0", '').Trim()
+if ($uid -eq '0') { throw 'the default Ubuntu user is still root; a tester has an ordinary user' }
