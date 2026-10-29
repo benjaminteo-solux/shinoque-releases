@@ -1,0 +1,54 @@
+# Installs a Shinoque candidate on a brand-new Windows machine, exactly as a
+# tester would, and fails unless the app starts and its engine answers.
+# Optionally installs an earlier release first, so the upgrade path is tested
+# too. Candidates are pre-releases, which installed apps never update to.
+name: clean-install
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Release tag holding the candidate Setup.exe (a pre-release)
+        required: true
+      previous:
+        description: Optional earlier release tag to install first (upgrade test)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare Ubuntu 24.04 on WSL2 like a tester's PC
+        shell: pwsh
+        run: ./.github/scripts/prepare-wsl.ps1
+
+      - name: Install the previous release first
+        if: ${{ inputs.previous != '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.previous }}" -Label previous
+
+      - name: Install and start the candidate
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.candidate }}" -Label candidate
+
+      - name: Collect evidence
+        if: always()
+        shell: pwsh
+        run: ./.github/scripts/collect-evidence.ps1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: clean-install-evidence
+          path: evidence
