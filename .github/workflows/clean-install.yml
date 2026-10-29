@@ -42,6 +42,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.candidate }}" -Mode ${{ inputs.previous != '' && 'update' || 'fresh' }}
 
+      - name: Probe Windows-to-WSL routes
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/probe-routes.ps1
+
       - name: Collect evidence
         if: always()
         shell: pwsh
