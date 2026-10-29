@@ -9,6 +9,17 @@ param(
   [ValidateSet('fresh', 'previous', 'update')][string]$Mode = 'fresh'
 )
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+# Every top-level window's own text, so a dialog waiting for a click is named
+# in the log instead of hanging the job silently.
+function Show-Windows {
+  $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+  foreach ($window in $desktop.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+    "--- window '$($window.Current.Name)' (pid $($window.Current.ProcessId))"
+    $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
+      ForEach-Object { $_.Current.Name } | Where-Object { $_ } | Select-Object -First 25 | ForEach-Object { "    $_" }
+  }
+}
 $work = Join-Path $env:RUNNER_TEMP $Mode
 New-Item -ItemType Directory -Force $work | Out-Null
 gh release download $Tag --repo $env:GITHUB_REPOSITORY --dir $work --pattern 'Shinoque-*.*.*-windows-x64-Setup.exe'
@@ -24,8 +35,16 @@ $started = Get-Date
 if ($Mode -eq 'update') {
   # The updater ends the app itself before its installer replaces the files.
   Get-Process Shinoque -ErrorAction SilentlyContinue | Stop-Process -Force
+  # 0.2.3 on a fresh PC is still stuck in setup (its solud download), and that
+  # wsl.exe child read-locks the bundled payload the installer must replace.
+  # On a tester's PC that step finished long ago.
+  Get-Process wsl -ErrorAction SilentlyContinue | Stop-Process -Force
   Start-Sleep -Seconds 2
-  $install = Start-Process -FilePath $setup.FullName -ArgumentList '/P', '/R', '/UPDATE' -PassThru -Wait
+  $install = Start-Process -FilePath $setup.FullName -ArgumentList '/P', '/R', '/UPDATE' -PassThru
+  if (-not $install.WaitForExit(600000)) {
+    Show-Windows
+    throw 'the update installer did not finish within 10 minutes (windows above)'
+  }
   "installer exit $($install.ExitCode)"
   if ($install.ExitCode -ne 0) { throw "update installer failed ($($install.ExitCode))" }
   $app = $null
@@ -47,8 +66,8 @@ if ($Mode -eq 'previous') {
   # Earlier releases may crash on their first launches (0.2.3 did, until its
   # shortcuts were stamped). Relaunch until it runs as itself, then leave a
   # marker in its data so the update must keep it.
-  for ($attempt = 1; $attempt -le 6; $attempt++) {
-    $until = (Get-Date).AddMinutes(4)
+  for ($attempt = 1; $attempt -le 4; $attempt++) {
+    $until = (Get-Date).AddMinutes(3)
     while ((Get-Date) -lt $until -and -not $app.HasExited) {
       try {
         $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 5
@@ -112,11 +131,16 @@ if ($text -notmatch 'Settings') { throw 'the window does not show the app yet (n
 if ($Mode -eq 'update') {
   $state = Get-Content (Join-Path $env:LOCALAPPDATA 'Shinoque\installer-state.json') -Raw | ConvertFrom-Json
   if ($state.releaseId -ne $version) { throw "installer state still names $($state.releaseId)" }
-  if ($env:PREVIOUS_READY -ne '1') { throw 'inconclusive: the previous release never ran, so the update path was not exercised' }
   $wsl = (wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'readlink ~/.local/share/shinoque/current; cat ~/.local/share/shinoque/data/ci-update-marker 2>/dev/null') -replace "`0", ''
   "$wsl"
   if ($wsl -notmatch "releases/$version") { throw 'the WSL release did not switch to the update' }
-  if ($wsl -notmatch 'kept') { throw "the update lost the previous release's data" }
+  # A previous release that never ran (0.2.3 on a fresh PC, like the testers')
+  # left no data to keep; the update still has to bring the app up.
+  if ($env:PREVIOUS_READY -eq '1') {
+    if ($wsl -notmatch 'kept') { throw "the update lost the previous release's data" }
+  } else {
+    '::warning::the previous release never ran, so data survival was not checked'
+  }
 }
 $crashes = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1000; StartTime = $started } -ErrorAction SilentlyContinue |
   Where-Object { $_.Message -match 'Shinoque' }

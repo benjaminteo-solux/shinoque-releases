@@ -21,7 +21,7 @@ permissions:
 jobs:
   install:
     runs-on: windows-2025
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 

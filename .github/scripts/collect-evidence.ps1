@@ -13,6 +13,7 @@ try {
   "== ports"; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 9878, 47800, 47801, 47802 } | Select-Object LocalAddress, LocalPort, OwningProcess | Format-Table | Out-String
   "== reserved port ranges"; netsh interface ipv4 show excludedportrange protocol=tcp
   "== dynamic range"; netsh interface ipv4 show dynamicport tcp
+  "== windows"; Get-Process | Where-Object { $_.MainWindowTitle } | Select-Object ProcessName, Id, MainWindowTitle | Format-Table -AutoSize | Out-String -Width 200
   "== crash records"; Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1000, 1001 } -MaxEvents 20 -ErrorAction SilentlyContinue | ForEach-Object { "--- $($_.TimeCreated)"; $_.Message }
 } *>&1 | Out-File (Join-Path $out 'windows.txt')
 foreach ($file in "$env:LOCALAPPDATA\Shinoque\startup-error.log", "$env:LOCALAPPDATA\Shinoque\installer-state.json") {
