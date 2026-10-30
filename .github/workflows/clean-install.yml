@@ -14,6 +14,10 @@ on:
         description: Optional earlier release tag to install first (upgrade test)
         required: false
         default: ""
+      networking:
+        description: WSL networking mode (nat, or mirrored as some testers use)
+        required: false
+        default: nat
 
 permissions:
   contents: read
@@ -27,7 +31,7 @@ jobs:
 
       - name: Prepare Ubuntu 24.04 on WSL2 like a tester's PC
         shell: pwsh
-        run: ./.github/scripts/prepare-wsl.ps1
+        run: ./.github/scripts/prepare-wsl.ps1 -Networking "${{ inputs.networking }}"
 
       - name: Install the previous release first
         if: ${{ inputs.previous != '' }}

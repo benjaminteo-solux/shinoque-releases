@@ -1,5 +1,11 @@
-# A tester's PC: WSL2, Ubuntu 24.04, an ordinary (non-root) default user.
+# A tester's PC: WSL2, Ubuntu 24.04, an ordinary (non-root) default user, and
+# the WSL networking mode under test (testers use both nat and mirrored).
+param([ValidateSet('nat', 'mirrored')][string]$Networking = 'nat')
 $ErrorActionPreference = 'Stop'
+if ($Networking -eq 'mirrored') {
+  "[wsl2]`nnetworkingMode=mirrored`n" | Set-Content -Path "$env:USERPROFILE\.wslconfig" -Encoding ascii
+  'WSL networking: mirrored'
+}
 wsl.exe --version
 wsl.exe --install --distribution Ubuntu-24.04 --web-download --no-launch
 if ($LASTEXITCODE -ne 0) { throw "wsl --install failed ($LASTEXITCODE)" }
