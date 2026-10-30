@@ -26,6 +26,10 @@ on:
         description: Machine type (windows-2025 x64, or windows-11-arm)
         required: false
         default: windows-2025
+      busy_ports:
+        description: Ports another program holds before install, comma-separated (e.g. 47800); Shinoque must move
+        required: false
+        default: ""
       dev_folder:
         description: Also check the installer refuses a developer folder (0.2.6 and later)
         type: boolean
@@ -52,6 +56,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./.github/scripts/dev-folder-refused.ps1 -Tag "${{ inputs.candidate }}" -Asset "${{ inputs.installer }}"
+
+      - name: Another program holds ports Shinoque would use
+        if: ${{ inputs.busy_ports != '' }}
+        shell: pwsh
+        run: ./.github/scripts/hold-ports.ps1 -Ports "${{ inputs.busy_ports }}"
 
       - name: Install the previous release first
         if: ${{ inputs.previous != '' }}

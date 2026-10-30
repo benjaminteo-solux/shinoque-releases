@@ -94,7 +94,11 @@ if ($Mode -eq 'previous') {
 
 $deadline = (Get-Date).AddMinutes(20)
 $healthy = $false
+# 0.2.7 and later move to another port block when one is taken, and save it.
+$stateFile = Join-Path $env:LOCALAPPDATA 'Shinoque\installer-state.json'
 while ((Get-Date) -lt $deadline) {
+  $saved = if (Test-Path $stateFile) { (Get-Content $stateFile -Raw | ConvertFrom-Json).portBase }
+  if ($saved -and $port -ne [int]$saved) { $port = [int]$saved; "Shinoque moved to ports $port-$($port + 2)" }
   if ($app.HasExited) {
     $report = Join-Path $env:LOCALAPPDATA 'Shinoque\startup-error.log'
     if (Test-Path $report) { Get-Content $report }
