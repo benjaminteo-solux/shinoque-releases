@@ -140,7 +140,7 @@ if (-not (& $appShown)) { throw "the window does not show the app yet (titles: $
 if ($Mode -eq 'update') {
   $state = Get-Content (Join-Path $env:LOCALAPPDATA 'Shinoque\installer-state.json') -Raw | ConvertFrom-Json
   if ($state.releaseId -ne $version) { throw "installer state still names $($state.releaseId)" }
-  $wsl = (wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'readlink ~/.local/share/shinoque/current; cat ~/.local/share/shinoque/data/ci-update-marker 2>/dev/null') -replace "`0", ''
+  $wsl = (wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'readlink ~/.local/share/shinoque/current; cat ~/.local/share/shinoque/data/ci-update-marker 2>/dev/null') -replace "`0", '' -join ' '
   "$wsl"
   if ($wsl -notmatch "releases/$version") { throw 'the WSL release did not switch to the update' }
   # A previous release that never ran (0.2.3 on a fresh PC, like the testers')
