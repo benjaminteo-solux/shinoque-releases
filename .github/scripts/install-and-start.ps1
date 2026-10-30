@@ -6,7 +6,9 @@
 #                   with /P /R /UPDATE and relaunches it
 param(
   [Parameter(Mandatory)][string]$Tag,
-  [ValidateSet('fresh', 'previous', 'update')][string]$Mode = 'fresh'
+  [ValidateSet('fresh', 'previous', 'update')][string]$Mode = 'fresh',
+  # arm64 = the unified installer published for ARM PCs (it also installs on x64)
+  [ValidateSet('x64', 'arm64')][string]$Asset = 'x64'
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
@@ -22,8 +24,8 @@ function Show-Windows {
 }
 $work = Join-Path $env:RUNNER_TEMP $Mode
 New-Item -ItemType Directory -Force $work | Out-Null
-gh release download $Tag --repo $env:GITHUB_REPOSITORY --dir $work --pattern 'Shinoque-*.*.*-windows-x64-Setup.exe'
-$setup = Get-ChildItem $work -Filter 'Shinoque-*-windows-x64-Setup.exe' | Select-Object -First 1
+gh release download $Tag --repo $env:GITHUB_REPOSITORY --dir $work --pattern "Shinoque-*.*.*-windows-$Asset-Setup.exe"
+$setup = Get-ChildItem $work -Filter "Shinoque-*-windows-$Asset-Setup.exe" | Select-Object -First 1
 if (-not $setup) { throw "no versioned Setup.exe in $Tag" }
 $version = [regex]::Match($setup.Name, 'Shinoque-(\d+\.\d+\.\d+)-').Groups[1].Value
 "== $Mode $Tag version $version"

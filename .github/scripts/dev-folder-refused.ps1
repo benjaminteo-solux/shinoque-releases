@@ -3,12 +3,12 @@
 # refuse that folder and leave nothing behind: on 2026-10-30 a public install
 # replaced a developer's own build. Runs before the real install, then clears
 # the folder so the rest of the job starts from a clean machine.
-param([Parameter(Mandatory)][string]$Tag)
+param([Parameter(Mandatory)][string]$Tag, [ValidateSet('x64', 'arm64')][string]$Asset = 'x64')
 $ErrorActionPreference = 'Stop'
 $work = Join-Path $env:RUNNER_TEMP 'dev-folder'
 New-Item -ItemType Directory -Force $work | Out-Null
-gh release download $Tag --repo $env:GITHUB_REPOSITORY --dir $work --pattern 'Shinoque-*.*.*-windows-x64-Setup.exe'
-$setup = Get-ChildItem $work -Filter 'Shinoque-*-windows-x64-Setup.exe' | Select-Object -First 1
+gh release download $Tag --repo $env:GITHUB_REPOSITORY --dir $work --pattern "Shinoque-*.*.*-windows-$Asset-Setup.exe"
+$setup = Get-ChildItem $work -Filter "Shinoque-*-windows-$Asset-Setup.exe" | Select-Object -First 1
 if (-not $setup) { throw "no versioned Setup.exe in $Tag" }
 $folder = Join-Path $env:LOCALAPPDATA 'Shinoque'
 New-Item -ItemType Directory -Force $folder | Out-Null

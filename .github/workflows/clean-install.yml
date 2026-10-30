@@ -18,6 +18,14 @@ on:
         description: WSL networking mode (nat, or mirrored as some testers use)
         required: false
         default: nat
+      installer:
+        description: Which Setup.exe to install (x64, or arm64 = the unified installer for ARM PCs)
+        required: false
+        default: x64
+      runner:
+        description: Machine type (windows-2025 x64, or windows-11-arm)
+        required: false
+        default: windows-2025
       dev_folder:
         description: Also check the installer refuses a developer folder (0.2.6 and later)
         type: boolean
@@ -29,7 +37,7 @@ permissions:
 
 jobs:
   install:
-    runs-on: windows-2025
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -43,20 +51,20 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./.github/scripts/dev-folder-refused.ps1 -Tag "${{ inputs.candidate }}"
+        run: ./.github/scripts/dev-folder-refused.ps1 -Tag "${{ inputs.candidate }}" -Asset "${{ inputs.installer }}"
 
       - name: Install the previous release first
         if: ${{ inputs.previous != '' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.previous }}" -Mode previous
+        run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.previous }}" -Mode previous -Asset "${{ inputs.installer }}"
 
       - name: Install and start the candidate
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.candidate }}" -Mode ${{ inputs.previous != '' && 'update' || 'fresh' }}
+        run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.candidate }}" -Mode ${{ inputs.previous != '' && 'update' || 'fresh' }} -Asset "${{ inputs.installer }}"
 
       - name: Probe Windows-to-WSL routes
         if: always()
