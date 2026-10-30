@@ -18,6 +18,11 @@ on:
         description: WSL networking mode (nat, or mirrored as some testers use)
         required: false
         default: nat
+      dev_folder:
+        description: Also check the installer refuses a developer folder (0.2.6 and later)
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -32,6 +37,13 @@ jobs:
       - name: Prepare Ubuntu 24.04 on WSL2 like a tester's PC
         shell: pwsh
         run: ./.github/scripts/prepare-wsl.ps1 -Networking "${{ inputs.networking }}"
+
+      - name: The installer refuses a developer build's folder
+        if: ${{ inputs.dev_folder && inputs.previous == '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/dev-folder-refused.ps1 -Tag "${{ inputs.candidate }}"
 
       - name: Install the previous release first
         if: ${{ inputs.previous != '' }}
