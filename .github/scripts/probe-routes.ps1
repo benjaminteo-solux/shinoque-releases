@@ -4,12 +4,13 @@ $distro = 'Ubuntu-24.04'
 function Probe([string]$label, [scriptblock]$action) {
   try { "$label -> $(& $action)" } catch { "$label -> FAILED: $($_.Exception.Message)" }
 }
-$eth0 = ((wsl.exe --distribution $distro --exec sh -c "ip -4 -o addr show eth0 | awk '{print `$4}' | cut -d/ -f1") -replace "`0", '').Trim()
+$eth0 = "$((wsl.exe --distribution $distro --exec sh -c "hostname -I") -replace "`0", '')".Trim().Split(' ')[0]
+"networking mode: $("$((wsl.exe --distribution $distro --exec wslinfo --networking-mode) -replace "`0", '')".Trim())"
 "== WSL"
 wsl.exe --version 2>&1 | ForEach-Object { $_ -replace "`0", '' }
 Get-Content "$env:USERPROFILE\.wslconfig" -ErrorAction SilentlyContinue
 "eth0=$eth0"
-wsl.exe --distribution $distro --exec sh -c 'hostname -I; ip route; ss -ltn | grep -E ":(47860|47876|8787)"'
+wsl.exe --distribution $distro --exec sh -c 'hostname -I; ip -4 -o addr; ip route; ss -ltn | grep -E ":(47860|47876|8787)"'
 "== Hyper-V firewall for WSL"
 Get-NetFirewallHyperVVMSetting -PolicyStore ActiveStore -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -ErrorAction SilentlyContinue | Format-List | Out-String
 "== routes"
@@ -25,6 +26,8 @@ $probe = Start-Process -FilePath (Join-Path $tools 'pipe-probe.exe') -ArgumentLi
   -RedirectStandardOutput (Join-Path $tools 'probe.out') -RedirectStandardError (Join-Path $tools 'probe.err')
 if (-not $probe.WaitForExit(30000)) { $probe.Kill(); 'pipe-probe: no answer within 30 s' }
 Get-Content (Join-Path $tools 'probe.out'), (Join-Path $tools 'probe.err') -ErrorAction SilentlyContinue
+"== app startup log so far"
+Get-ChildItem "$env:APPDATA\solubrowse" -Recurse -Filter solubrowse.log -ErrorAction SilentlyContinue | ForEach-Object { Select-String -Path $_.FullName -Pattern '\[bootstrap\]' | ForEach-Object { $_.Line } }
 "== same pipe by hand"
 Probe 'wsl.exe stdin -> node relay' {
   $js = "const s=require('node:net').createConnection({host:'127.0.0.1',port:47860});s.on('connect',()=>{process.stdin.pipe(s);s.pipe(process.stdout)});s.on('error',e=>{console.error(e.message);process.exit(1)})"

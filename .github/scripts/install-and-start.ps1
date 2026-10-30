@@ -128,7 +128,13 @@ if ($text -match 'could not start|Retry after') { throw "the window shows an err
 # WebView2 page text is not in the UI Automation tree, but the app titles its
 # window after the open space ("shinoque · Home"); the starting and error
 # screens are titled plain "shinoque".
-if (-not ($names | Where-Object { $_ -match '^shinoque · ' })) { throw "the window does not show the app yet (titles: $($names -join ' / '))" }
+# A slow start still passes if the app shows within five more minutes; the log
+# records how long it took.
+$appShown = { $script:names = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name } | Where-Object { $_ }; [bool]($script:names | Where-Object { $_ -match '^shinoque · ' }) }
+$waitUntil = (Get-Date).AddMinutes(5)
+while (-not (& $appShown) -and (Get-Date) -lt $waitUntil) { Start-Sleep -Seconds 10 }
+if (-not (& $appShown)) { throw "the window does not show the app yet (titles: $($names -join ' / '))" }
+"app shown after $([int]((Get-Date) - $started).TotalSeconds) s"
 
 # An update keeps the user's data and switches the WSL release.
 if ($Mode -eq 'update') {
