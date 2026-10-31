@@ -144,6 +144,33 @@ while (-not (& $appShown) -and (Get-Date) -lt $waitUntil) { Start-Sleep -Seconds
 if (-not (& $appShown)) { throw "the window does not show the app yet (titles: $($names -join ' / '))" }
 "app shown after $([int]((Get-Date) - $started).TotalSeconds) s"
 
+# 0.2.12 and later reuse an intact installed release; a relaunch after WSL
+# stops (as after a restart) must not move and extract the runtime again.
+if ($Mode -eq 'fresh' -and [version]$version -ge [version]'0.2.12') {
+  Get-Process Shinoque -ErrorAction SilentlyContinue | Stop-Process -Force
+  wsl.exe --shutdown
+  Start-Sleep -Seconds 3
+  $relaunched = Get-Date
+  $app = Start-Process -FilePath $exe -PassThru
+  $extracting = $false
+  $healthy = $false
+  $until = (Get-Date).AddMinutes(10)
+  while ((Get-Date) -lt $until) {
+    # The full install runs its script through wsl.exe; its text names tar.
+    if (Get-CimInstance Win32_Process -Filter "Name='wsl.exe'" | Where-Object { $_.CommandLine -match 'tar -xzf' }) { $extracting = $true }
+    if ($app.HasExited) { throw ("Shinoque exited during the relaunch with 0x{0:X}" -f $app.ExitCode) }
+    try {
+      $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2
+      if ($health.name -eq 'shinoqued' -and $health.releaseId -eq $version) { $healthy = $true; break }
+    } catch {}
+    Start-Sleep -Seconds 1
+  }
+  if (-not $healthy) { throw 'the engine never answered after the relaunch' }
+  "relaunch healthy after $([int]((Get-Date) - $relaunched).TotalSeconds) s"
+  if ($extracting) { throw 'the relaunch extracted the runtime again' }
+  'the relaunch reused the installed release'
+}
+
 # An update or reinstall keeps the user's data and switches the WSL release.
 if ($Mode -in 'update', 'reinstall') {
   $state = Get-Content (Join-Path $env:LOCALAPPDATA 'Shinoque\installer-state.json') -Raw | ConvertFrom-Json
