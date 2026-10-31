@@ -34,6 +34,12 @@ $version = [regex]::Match($setup.Name, 'Shinoque-(\d+\.\d+\.\d+)-').Groups[1].Va
 # 0.2.4 moved the installed proxy out of Windows' reserved port ranges.
 $port = if ([version]$version -lt [version]'0.2.4') { 14800 } else { 47800 }
 $exe = Join-Path $env:LOCALAPPDATA 'Shinoque\Shinoque.exe'
+# 0.2.13 and later ask a brand-new install how it is used; the gate chooses
+# this PC whenever it installs one from scratch (fresh, or the previous release).
+$launchArgs = if ($Mode -in 'fresh', 'previous' -and [version]$version -ge [version]'0.2.13') { @('--setup-this-pc') } else { @() }
+function Start-Shinoque {
+  if ($launchArgs) { Start-Process -FilePath $exe -ArgumentList $launchArgs -PassThru } else { Start-Process -FilePath $exe -PassThru }
+}
 $started = Get-Date
 
 if ($Mode -eq 'update') {
@@ -63,9 +69,7 @@ if ($Mode -eq 'update') {
   $install = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -PassThru -Wait
   "installer exit $($install.ExitCode)"
   if ($install.ExitCode -ne 0) { throw "installer failed ($($install.ExitCode))" }
-  # 0.2.13 and later ask a brand-new install how it is used; choose this PC.
-  $firstRun = if ($Mode -eq 'fresh' -and [version]$version -ge [version]'0.2.13') { @('--setup-this-pc') } else { @() }
-  $app = if ($firstRun) { Start-Process -FilePath $exe -ArgumentList $firstRun -PassThru } else { Start-Process -FilePath $exe -PassThru }
+  $app = Start-Shinoque
 }
 
 if ($Mode -eq 'previous') {
@@ -89,7 +93,7 @@ if ($Mode -eq 'previous') {
     "launch $attempt did not come up (exited: $($app.HasExited)); relaunching"
     Get-Process Shinoque -ErrorAction SilentlyContinue | Stop-Process -Force
     Start-Sleep -Seconds 2
-    $app = Start-Process -FilePath $exe -PassThru
+    $app = Start-Shinoque
   }
   "::warning::previous release $version never came up; the update test is inconclusive"
   "PREVIOUS_READY=0" | Out-File -Append $env:GITHUB_ENV
