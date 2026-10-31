@@ -26,6 +26,11 @@ on:
         description: Machine type (windows-2025 x64, or windows-11-arm)
         required: false
         default: windows-2025
+      reinstall:
+        description: With previous, run the candidate Setup.exe over it (as a tester would) instead of updating in the app
+        type: boolean
+        required: false
+        default: false
       busy_ports:
         description: Ports another program holds before install, comma-separated (e.g. 47800); Shinoque must move
         required: false
@@ -81,7 +86,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.candidate }}" -Mode ${{ inputs.previous != '' && 'update' || 'fresh' }} -Asset "${{ inputs.installer }}"
+        run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.candidate }}" -Mode ${{ inputs.previous == '' && 'fresh' || (inputs.reinstall && 'reinstall' || 'update') }} -Asset "${{ inputs.installer }}"
 
       - name: Probe Windows-to-WSL routes
         if: always()

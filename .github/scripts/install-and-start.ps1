@@ -4,9 +4,11 @@
 #   -Mode previous  an earlier (possibly broken) release, only to set up an update
 #   -Mode update    what the in-app updater does: the app ends, the installer runs
 #                   with /P /R /UPDATE and relaunches it
+#   -Mode reinstall a tester running a new Setup.exe over the install: the old
+#                   uninstaller removes the WSL runtime first, data must stay
 param(
   [Parameter(Mandatory)][string]$Tag,
-  [ValidateSet('fresh', 'previous', 'update')][string]$Mode = 'fresh',
+  [ValidateSet('fresh', 'previous', 'update', 'reinstall')][string]$Mode = 'fresh',
   # arm64 = the unified installer published for ARM PCs (it also installs on x64)
   [ValidateSet('x64', 'arm64')][string]$Asset = 'x64'
 )
@@ -142,8 +144,8 @@ while (-not (& $appShown) -and (Get-Date) -lt $waitUntil) { Start-Sleep -Seconds
 if (-not (& $appShown)) { throw "the window does not show the app yet (titles: $($names -join ' / '))" }
 "app shown after $([int]((Get-Date) - $started).TotalSeconds) s"
 
-# An update keeps the user's data and switches the WSL release.
-if ($Mode -eq 'update') {
+# An update or reinstall keeps the user's data and switches the WSL release.
+if ($Mode -in 'update', 'reinstall') {
   $state = Get-Content (Join-Path $env:LOCALAPPDATA 'Shinoque\installer-state.json') -Raw | ConvertFrom-Json
   if ($state.releaseId -ne $version) { throw "installer state still names $($state.releaseId)" }
   $wsl = (wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'readlink ~/.local/share/shinoque/current; cat ~/.local/share/shinoque/data/ci-update-marker 2>/dev/null') -replace "`0", '' -join ' '
