@@ -40,6 +40,11 @@ on:
         type: boolean
         required: false
         default: true
+      window:
+        description: Start in window mode instead (0.2.13 and later) - it must reach its setup page and never set up WSL
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -81,8 +86,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.previous }}" -Mode previous -Asset "${{ inputs.installer }}"
 
+      - name: Start in window mode
+        if: ${{ inputs.window }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/window-start.ps1 -Tag "${{ inputs.candidate }}"
+
       - name: Install and start the candidate
-        if: ${{ inputs.installer != 'arm64' || inputs.runner == 'windows-11-arm' }}
+        if: ${{ !inputs.window && (inputs.installer != 'arm64' || inputs.runner == 'windows-11-arm') }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
