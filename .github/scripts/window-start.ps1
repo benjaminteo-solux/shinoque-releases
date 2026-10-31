@@ -35,7 +35,19 @@ while ((Get-Date) -lt $deadline) {
   Start-Sleep -Seconds 3
 }
 "window title: '$title'"
-if ($title -ne $expected) { throw "the setup page did not reach its first step (title '$title')" }
+if ($title -ne $expected) {
+  # What the window shows, for the evidence (WebView2 text is not in UIA).
+  Add-Type -AssemblyName System.Drawing, System.Windows.Forms
+  $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+  $shot = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+  [System.Drawing.Graphics]::FromImage($shot).CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+  $evidence = Join-Path $env:GITHUB_WORKSPACE 'evidence'
+  New-Item -ItemType Directory -Force $evidence | Out-Null
+  $shot.Save((Join-Path $evidence 'window-mode.png'))
+  $report = Join-Path $env:LOCALAPPDATA 'Shinoque\startup-error.log'
+  if (Test-Path $report) { Get-Content $report }
+  throw "the setup page did not reach its first step (title '$title')"
+}
 
 # Nothing of a local engine: no release unpacked into WSL.
 $releases = (wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'ls ~/.local/share/shinoque/releases 2>/dev/null | wc -l') -replace "`0", '' -join ''
