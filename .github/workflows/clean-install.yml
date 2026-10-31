@@ -19,7 +19,7 @@ on:
         required: false
         default: nat
       installer:
-        description: Which Setup.exe to install (x64, or arm64 = the unified installer for ARM PCs)
+        description: Which Setup.exe (x64, or arm64 = the ARM installer, which an x64 runner must refuse)
         required: false
         default: x64
       runner:
@@ -50,8 +50,15 @@ jobs:
         shell: pwsh
         run: ./.github/scripts/prepare-wsl.ps1 -Networking "${{ inputs.networking }}"
 
+      - name: The ARM installer refuses an x64 PC
+        if: ${{ inputs.installer == 'arm64' && inputs.runner != 'windows-11-arm' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/arm64-refused.ps1 -Tag "${{ inputs.candidate }}"
+
       - name: The installer refuses a developer build's folder
-        if: ${{ inputs.dev_folder && inputs.previous == '' }}
+        if: ${{ inputs.dev_folder && inputs.previous == '' && inputs.installer != 'arm64' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -63,13 +70,14 @@ jobs:
         run: ./.github/scripts/hold-ports.ps1 -Ports "${{ inputs.busy_ports }}"
 
       - name: Install the previous release first
-        if: ${{ inputs.previous != '' }}
+        if: ${{ inputs.previous != '' && inputs.installer != 'arm64' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./.github/scripts/install-and-start.ps1 -Tag "${{ inputs.previous }}" -Mode previous -Asset "${{ inputs.installer }}"
 
       - name: Install and start the candidate
+        if: ${{ inputs.installer != 'arm64' || inputs.runner == 'windows-11-arm' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
