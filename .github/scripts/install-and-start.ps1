@@ -63,7 +63,9 @@ if ($Mode -eq 'update') {
   $install = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -PassThru -Wait
   "installer exit $($install.ExitCode)"
   if ($install.ExitCode -ne 0) { throw "installer failed ($($install.ExitCode))" }
-  $app = Start-Process -FilePath $exe -PassThru
+  # 0.2.13 and later ask a brand-new install how it is used; choose this PC.
+  $firstRun = if ($Mode -eq 'fresh' -and [version]$version -ge [version]'0.2.13') { @('--setup-this-pc') } else { @() }
+  $app = if ($firstRun) { Start-Process -FilePath $exe -ArgumentList $firstRun -PassThru } else { Start-Process -FilePath $exe -PassThru }
 }
 
 if ($Mode -eq 'previous') {
