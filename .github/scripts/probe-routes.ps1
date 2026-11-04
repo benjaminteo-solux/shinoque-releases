@@ -25,6 +25,19 @@ for ($i = 0; $i -lt 36 -and -not $listening; $i++) {
   if (-not $listening) { Start-Sleep -Seconds 5 }
 }
 "8787 listening in WSL: $listening"
+if (-not $listening) {
+  # A runner may have no SoluTerminal. A stand-in on the same port, with a fake
+  # token, still shows the forwarder's owner and exercises the Code proxy's check.
+  "no SoluTerminal here: using a stand-in on 8787"
+  $standin = @'
+mkdir -p "$HOME/.solu"
+[ -s "$HOME/.solu/token" ] || printf %064d 0 > "$HOME/.solu/token"
+setsid nohup "$HOME/.local/share/shinoque/current/runtime/bin/node" -e "require('node:http').createServer((q,s)=>s.end('stand-in')).listen(8787,'127.0.0.1')" >/dev/null 2>&1 </dev/null &
+'@
+  wsl.exe --distribution $distro --exec sh -c ($standin -replace "`r", '')
+  # The forwarder notices a new WSL listener by polling.
+  Start-Sleep -Seconds 20
+}
 Probe 'Windows -> Code proxy 127.0.0.1:47801' { (Invoke-WebRequest -Uri 'http://127.0.0.1:47801/api/health' -TimeoutSec 20 -UseBasicParsing).StatusCode }
 "== who holds the Windows end of each forwarded port (this repo is public: runner paths only)"
 "whoami: $(whoami)"
