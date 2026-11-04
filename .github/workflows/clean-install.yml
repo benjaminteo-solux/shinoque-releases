@@ -40,6 +40,11 @@ on:
         type: boolean
         required: false
         default: true
+      code_required:
+        description: Under nat, fail unless a real SoluTerminal installs and Code answers. Off only for a sample of a release older than the installer fix
+        type: boolean
+        required: false
+        default: true
       window:
         description: Start in window mode instead (0.2.13 and later) - it must reach its setup page and never set up WSL
         type: boolean
@@ -105,6 +110,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          REQUIRE_CODE: ${{ inputs.code_required && inputs.networking == 'nat' && !inputs.window && inputs.installer != 'arm64' }}
         run: ./.github/scripts/probe-routes.ps1
 
       - name: Collect evidence

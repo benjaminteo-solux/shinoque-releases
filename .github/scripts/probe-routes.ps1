@@ -25,7 +25,8 @@ for ($i = 0; $i -lt 36 -and -not $listening; $i++) {
   if (-not $listening) { Start-Sleep -Seconds 5 }
 }
 "8787 listening in WSL: $listening"
-if (-not $listening) {
+$requireCode = $env:REQUIRE_CODE -eq 'true'
+if (-not $listening -and -not $requireCode) {
   # A runner may have no SoluTerminal. A stand-in on the same port, with a fake
   # token, still shows the forwarder's owner and exercises the Code proxy's check.
   "no SoluTerminal here: using a stand-in on 8787"
@@ -40,7 +41,12 @@ if (-not $listening) {
   "stand-in, 20 s on:"
   wsl.exe --distribution $distro --exec sh -c 'ss -ltn | grep ":8787 " || echo "nothing listens on 8787 in WSL"; curl -s -m 5 http://127.0.0.1:8787/ || echo "no answer in WSL"' 2>&1 | ForEach-Object { "$_" -replace "`0", '' }
 }
-Probe 'Windows -> Code proxy 127.0.0.1:47801' { (Invoke-WebRequest -Uri 'http://127.0.0.1:47801/api/health' -TimeoutSec 20 -UseBasicParsing).StatusCode }
+$codeAnswered = $false
+Probe 'Windows -> Code proxy 127.0.0.1:47801' {
+  $status = (Invoke-WebRequest -Uri 'http://127.0.0.1:47801/api/health' -TimeoutSec 20 -UseBasicParsing).StatusCode
+  $script:codeAnswered = $status -eq 200
+  $status
+}
 "== who holds the Windows end of each forwarded port (this repo is public: runner paths only)"
 "whoami: $(whoami)"
 foreach ($port in 47860, 8787) {
@@ -75,5 +81,11 @@ Get-ChildItem "$env:APPDATA\solubrowse" -Recurse -Filter solubrowse.log -ErrorAc
 Probe 'wsl.exe stdin -> node relay' {
   $js = "const s=require('node:net').createConnection({host:'127.0.0.1',port:47860});s.on('connect',()=>{process.stdin.pipe(s);s.pipe(process.stdout)});s.on('error',e=>{console.error(e.message);process.exit(1)})"
   ("GET /api/health HTTP/1.1`r`nHost: 127.0.0.1:47800`r`nConnection: close`r`n`r`n" | wsl.exe --distribution $distro --exec sh -c 'exec "$HOME/.local/share/shinoque/current/runtime/bin/node" -e "$1"' sh $js) -join ' '
+}
+# A new tester with no Code passed this gate while the installer was broken. The other routes are
+# for reading, whatever they say.
+if ($requireCode -and -not ($listening -and $codeAnswered)) {
+  "FAILED: SoluTerminal listening in WSL: $listening; Code proxy answered: $codeAnswered"
+  exit 1
 }
 exit 0
