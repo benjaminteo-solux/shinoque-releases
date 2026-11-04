@@ -15,7 +15,7 @@ on:
         required: false
         default: ""
       networking:
-        description: WSL networking mode (nat, or mirrored as some testers use)
+        description: WSL networking mode (nat, or none for the no-TCP pipe route). mirrored fails on Windows Server, which can't run it
         required: false
         default: nat
       installer:

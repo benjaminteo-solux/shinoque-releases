@@ -1,10 +1,12 @@
 # A tester's PC: WSL2, Ubuntu 24.04, an ordinary (non-root) default user, and
-# the WSL networking mode under test (testers use both nat and mirrored).
-param([ValidateSet('nat', 'mirrored')][string]$Networking = 'nat')
+# the WSL networking mode under test. none has no TCP into WSL, so it tests the
+# wsl.exe pipe. Windows Server can't run mirrored and falls back to none, so
+# mirrored fails here on windows-2025; its evidence comes from a real tester.
+param([ValidateSet('nat', 'none', 'mirrored')][string]$Networking = 'nat')
 $ErrorActionPreference = 'Stop'
-if ($Networking -eq 'mirrored') {
-  "[wsl2]`nnetworkingMode=mirrored`n" | Set-Content -Path "$env:USERPROFILE\.wslconfig" -Encoding ascii
-  'WSL networking: mirrored'
+if ($Networking -ne 'nat') {
+  "[wsl2]`nnetworkingMode=$Networking`n" | Set-Content -Path "$env:USERPROFILE\.wslconfig" -Encoding ascii
+  "WSL networking: $Networking"
 }
 wsl.exe --version
 wsl.exe --install --distribution Ubuntu-24.04 --web-download --no-launch
@@ -30,3 +32,8 @@ wsl.exe --list --verbose
 wsl.exe --distribution Ubuntu-24.04 --exec sh -c 'echo "user=$(id -un) uid=$(id -u) $(. /etc/os-release; echo $VERSION_ID) $(uname -m)"'
 $uid = ((wsl.exe --distribution Ubuntu-24.04 --exec id -u) -replace "`0", '').Trim()
 if ($uid -eq '0') { throw 'the default Ubuntu user is still root; a tester has an ordinary user' }
+# WSL falls back quietly when it can't run a mode, and the run then passes while
+# testing something else. No answer counts as a mismatch too.
+$reported = ((wsl.exe --distribution Ubuntu-24.04 --exec wslinfo --networking-mode) -replace "`0", '' | Out-String).Trim()
+"WSL networking: requested $Networking, reported '$reported'"
+if ($reported -ne $Networking) { throw "requested WSL networking $Networking but WSL reports '$reported'" }

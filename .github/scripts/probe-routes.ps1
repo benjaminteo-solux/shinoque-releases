@@ -18,6 +18,34 @@ Probe 'inside WSL 127.0.0.1:47860' { (wsl.exe --distribution $distro --exec sh -
 Probe 'Windows -> 127.0.0.1:47860 (localhost forwarding)' { (Test-NetConnection 127.0.0.1 -Port 47860 -WarningAction SilentlyContinue).TcpTestSucceeded }
 Probe "Windows -> ${eth0}:47860 (WSL address)" { (Test-NetConnection $eth0 -Port 47860 -WarningAction SilentlyContinue).TcpTestSucceeded }
 Probe 'Windows -> proxy 127.0.0.1:47800' { (Invoke-WebRequest -Uri 'http://127.0.0.1:47800/api/health' -TimeoutSec 20 -UseBasicParsing).Content }
+"== SoluTerminal in WSL, then one request through the Code proxy"
+$listening = $false
+for ($i = 0; $i -lt 36 -and -not $listening; $i++) {
+  $listening = [bool]((wsl.exe --distribution $distro --exec sh -c 'ss -ltn | grep ":8787 "') -replace "`0", '')
+  if (-not $listening) { Start-Sleep -Seconds 5 }
+}
+"8787 listening in WSL: $listening"
+Probe 'Windows -> Code proxy 127.0.0.1:47801' { (Invoke-WebRequest -Uri 'http://127.0.0.1:47801/api/health' -TimeoutSec 20 -UseBasicParsing).StatusCode }
+"== who holds the Windows end of each forwarded port (this repo is public: runner paths only)"
+"whoami: $(whoami)"
+foreach ($port in 47860, 8787) {
+  # Held open during the read, as the Code proxy's own connection is when it looks up the owner.
+  $held = [System.Net.Sockets.TcpClient]::new()
+  try {
+    $held.Connect('127.0.0.1', $port)
+    "port ${port}: connected from $($held.Client.LocalEndPoint)"
+  } catch {
+    "port ${port}: no connection from Windows"
+  }
+  $rows = @(Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue)
+  if (-not $rows) { "port ${port}: no Windows row" }
+  foreach ($row in $rows) {
+    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($row.OwningProcess)" -ErrorAction SilentlyContinue
+    $user = if ($process) { $owner = Invoke-CimMethod -InputObject $process -MethodName GetOwner; "$($owner.Domain)\$($owner.User)" } else { 'unknown' }
+    "port ${port}: $($row.State) $($row.LocalAddress):$($row.LocalPort) from $($row.RemoteAddress):$($row.RemotePort) pid=$($row.OwningProcess) image=$($process.ExecutablePath) user=$user"
+  }
+  $held.Dispose()
+}
 "== the app's own pipe code (pipe-probe.exe)"
 $tools = Join-Path $env:RUNNER_TEMP 'tools'
 New-Item -ItemType Directory -Force $tools | Out-Null
@@ -27,7 +55,7 @@ $probe = Start-Process -FilePath (Join-Path $tools 'pipe-probe.exe') -ArgumentLi
 if (-not $probe.WaitForExit(30000)) { $probe.Kill(); 'pipe-probe: no answer within 30 s' }
 Get-Content (Join-Path $tools 'probe.out'), (Join-Path $tools 'probe.err') -ErrorAction SilentlyContinue
 "== app startup log so far"
-Get-ChildItem "$env:APPDATA\solubrowse" -Recurse -Filter solubrowse.log -ErrorAction SilentlyContinue | ForEach-Object { Select-String -Path $_.FullName -Pattern '\[bootstrap\]' | ForEach-Object { $_.Line } }
+Get-ChildItem "$env:APPDATA\solubrowse" -Recurse -Filter solubrowse.log -ErrorAction SilentlyContinue | ForEach-Object { Select-String -Path $_.FullName -Pattern '\[bootstrap\]|\[code-proxy\]' | ForEach-Object { $_.Line } }
 "== same pipe by hand"
 Probe 'wsl.exe stdin -> node relay' {
   $js = "const s=require('node:net').createConnection({host:'127.0.0.1',port:47860});s.on('connect',()=>{process.stdin.pipe(s);s.pipe(process.stdout)});s.on('error',e=>{console.error(e.message);process.exit(1)})"
