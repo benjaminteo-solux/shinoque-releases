@@ -29,17 +29,16 @@ if (-not $listening) {
   # A runner may have no SoluTerminal. A stand-in on the same port, with a fake
   # token, still shows the forwarder's owner and exercises the Code proxy's check.
   "no SoluTerminal here: using a stand-in on 8787"
-  $standin = @'
-mkdir -p "$HOME/.solu"
-[ -s "$HOME/.solu/token" ] || printf %064d 0 > "$HOME/.solu/token"
-setsid nohup "$HOME/.local/share/shinoque/current/runtime/bin/node" -e "require('node:http').createServer((q,s)=>s.end('stand-in')).listen(8787,'127.0.0.1')" >"$HOME/.solu/stand-in.log" 2>&1 </dev/null &
-'@
-  wsl.exe --distribution $distro --exec sh -c ($standin -replace "`r", '')
+  # Held by a wsl.exe that stays running: one started in the background of a finished wsl.exe dies.
+  $server = "require('node:http').createServer((q,s)=>s.end('stand-in')).listen(8787,'127.0.0.1')"
+  $server | wsl.exe --distribution $distro --exec sh -c 'mkdir -p "$HOME/.solu"; cat > "$HOME/.solu/stand-in.js"; [ -s "$HOME/.solu/token" ] || printf %064d 0 > "$HOME/.solu/token"'
+  $wslHome = "$((wsl.exe --distribution $distro --exec sh -c 'printf %s "$HOME"') -replace "`0", '')".Trim()
+  Start-Process wsl.exe -NoNewWindow -RedirectStandardOutput (Join-Path $env:RUNNER_TEMP 'stand-in.out') -RedirectStandardError (Join-Path $env:RUNNER_TEMP 'stand-in.err') -ArgumentList @('--distribution', $distro, '--exec', "$wslHome/.local/share/shinoque/current/runtime/bin/node", "$wslHome/.solu/stand-in.js") | Out-Null
   # The forwarder notices a new WSL listener by polling.
   Start-Sleep -Seconds 20
   # A stand-in that died and a forwarder that missed it look alike from Windows.
   "stand-in, 20 s on:"
-  wsl.exe --distribution $distro --exec sh -c 'ss -ltn | grep ":8787 " || echo "nothing listens on 8787 in WSL"; cat "$HOME/.solu/stand-in.log"; curl -s -m 5 http://127.0.0.1:8787/ || echo "no answer in WSL"' 2>&1 | ForEach-Object { "$_" -replace "`0", '' }
+  wsl.exe --distribution $distro --exec sh -c 'ss -ltn | grep ":8787 " || echo "nothing listens on 8787 in WSL"; curl -s -m 5 http://127.0.0.1:8787/ || echo "no answer in WSL"' 2>&1 | ForEach-Object { "$_" -replace "`0", '' }
 }
 Probe 'Windows -> Code proxy 127.0.0.1:47801' { (Invoke-WebRequest -Uri 'http://127.0.0.1:47801/api/health' -TimeoutSec 20 -UseBasicParsing).StatusCode }
 "== who holds the Windows end of each forwarded port (this repo is public: runner paths only)"
