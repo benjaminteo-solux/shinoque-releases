@@ -32,11 +32,14 @@ if (-not $listening) {
   $standin = @'
 mkdir -p "$HOME/.solu"
 [ -s "$HOME/.solu/token" ] || printf %064d 0 > "$HOME/.solu/token"
-setsid nohup "$HOME/.local/share/shinoque/current/runtime/bin/node" -e "require('node:http').createServer((q,s)=>s.end('stand-in')).listen(8787,'127.0.0.1')" >/dev/null 2>&1 </dev/null &
+setsid nohup "$HOME/.local/share/shinoque/current/runtime/bin/node" -e "require('node:http').createServer((q,s)=>s.end('stand-in')).listen(8787,'127.0.0.1')" >"$HOME/.solu/stand-in.log" 2>&1 </dev/null &
 '@
   wsl.exe --distribution $distro --exec sh -c ($standin -replace "`r", '')
   # The forwarder notices a new WSL listener by polling.
   Start-Sleep -Seconds 20
+  # A stand-in that died and a forwarder that missed it look alike from Windows.
+  "stand-in, 20 s on:"
+  wsl.exe --distribution $distro --exec sh -c 'ss -ltn | grep ":8787 " || echo "nothing listens on 8787 in WSL"; cat "$HOME/.solu/stand-in.log"; curl -s -m 5 http://127.0.0.1:8787/ || echo "no answer in WSL"' 2>&1 | ForEach-Object { "$_" -replace "`0", '' }
 }
 Probe 'Windows -> Code proxy 127.0.0.1:47801' { (Invoke-WebRequest -Uri 'http://127.0.0.1:47801/api/health' -TimeoutSec 20 -UseBasicParsing).StatusCode }
 "== who holds the Windows end of each forwarded port (this repo is public: runner paths only)"
