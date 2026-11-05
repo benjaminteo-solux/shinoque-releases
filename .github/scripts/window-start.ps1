@@ -27,11 +27,11 @@ $deadline = (Get-Date).AddMinutes(3)
 $title = ''
 while ((Get-Date) -lt $deadline) {
   if ($app.HasExited) { throw ("Shinoque exited with 0x{0:X}" -f $app.ExitCode) }
-  $app.Refresh()
-  if ($app.MainWindowHandle -ne 0) {
-    $title = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle).Current.Name
-    if ($title -eq $expected) { break }
+  $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+  foreach ($w in $desktop.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+    if ($w.Current.ProcessId -eq $app.Id -and $w.Current.Name -cmatch '^shinoque') { $title = $w.Current.Name }
   }
+  if ($title -eq $expected) { break }
   Start-Sleep -Seconds 3
 }
 "window title: '$title'"

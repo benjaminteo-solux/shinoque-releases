@@ -130,7 +130,16 @@ Start-Sleep -Seconds 30
 $app.Refresh()
 if ($app.HasExited) { throw ("Shinoque exited after starting (0x{0:X})" -f $app.ExitCode) }
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-$root = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+$desktop = [System.Windows.Automation.AutomationElement]::RootElement
+$root = $null
+$until = (Get-Date).AddMinutes(2)
+while (-not $root -and (Get-Date) -lt $until) {
+  foreach ($w in $desktop.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+    if ($w.Current.ProcessId -eq $app.Id -and $w.Current.Name -cmatch '^shinoque') { $root = $w; break }
+  }
+  if (-not $root) { Start-Sleep -Seconds 2 }
+}
+if (-not $root) { throw 'no app window' }
 $names = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
   ForEach-Object { $_.Current.Name } | Where-Object { $_ }
 $evidence = Join-Path $env:GITHUB_WORKSPACE 'evidence'
